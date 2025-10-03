@@ -88,7 +88,7 @@ static void print_dataset_info(hid_t dset) {
             format_size(size_str_comp, sizeof(size_str_comp), storage_size);
 
             snprintf(filter_info, sizeof(filter_info),
-                    "(%s%s level=%u%s->%s)", COLOR_COMP, "gzip", level, COLOR_RESET, size_str_comp);
+                    "(%s%s level=%u%s)=>%s", COLOR_COMP, "gzip", level, COLOR_RESET, size_str_comp);
         } else if (filter == H5Z_FILTER_SZIP) {
             unsigned int options_mask = (cd_nelmts > 0) ? cd_values[0] : 0;
             unsigned int pixels_per_block = (cd_nelmts > 1) ? cd_values[1] : 0;
@@ -163,7 +163,7 @@ static void print_attr_value(hid_t attr) {
             char *vstr = NULL;
             H5Aread(attr, type, &vstr);
             if (vstr) {
-                printf("\"%s\" (string)", vstr);
+                printf("\"%s\" (%sstring%s)", vstr, COLOR_TYPE, COLOR_RESET);
                 free(vstr);
             }
         } else {
