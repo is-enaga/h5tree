@@ -1,26 +1,16 @@
-// treeh5.c
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>   // isatty
 #include <hdf5.h>
 
+#include "utils.h"
+#include "tree.h"
+
 #define MAX_DEPTH 64
 
-typedef struct {
-    int depth;
-    int last_flags[MAX_DEPTH];
-} IterData;
-
-static int use_color = 0;
-static int show_structure_only = 0;
-
-#define COLOR_RESET   (use_color ? "\033[0m"  : "")
-#define COLOR_GROUP   (use_color ? "\033[96m" : "")                        // グループは無色
-#define COLOR_DATASET (use_color ? "\033[92m" : "")  // 明るい緑
-#define COLOR_ATTR    ""
-#define COLOR_TYPE   (use_color ? "\033[96m" : "")  // 型名 → 明るい水色
-#define COLOR_COMP   (use_color ? "\033[91m" : "")  // 圧縮形式 → 赤
+int use_color = 0;
+int show_structure_only = 0;
 
 static void print_indent(int depth, const int *last_flags) {
     for (int i = 1; i < depth; i++) {
@@ -31,25 +21,9 @@ static void print_indent(int depth, const int *last_flags) {
     }
 }
 
-static void format_size(char *buf, size_t bufsize, hsize_t bytes) {
-    const char *units[] = {"B", "KB", "MB", "GB", "TB"};
-    double size = (double)bytes;
-    int unit = 0;
-    while (size >= 1024.0 && unit < 4) {
-        size /= 1024.0;
-        unit++;
-    }
 
-    if (unit == 0) {
-        // B のときは整数表示
-        snprintf(buf, bufsize, "%llu%s", (unsigned long long)bytes, units[unit]);
-    } else {
-        // KB 以上は小数点付き
-        snprintf(buf, bufsize, "%.1f%s", size, units[unit]);
-    }
-}
 
-static void print_dataset_info(hid_t dset) {
+void print_dataset_info(hid_t dset) {
     hid_t space = H5Dget_space(dset);
     int ndims = H5Sget_simple_extent_ndims(space);
     hsize_t dims[32] = {0};
@@ -136,7 +110,7 @@ static void print_dataset_info(hid_t dset) {
     H5Pclose(dcpl);
 }
 
-static void print_attr_value(hid_t attr) {
+void print_attr_value(hid_t attr) {
     hid_t type = H5Aget_type(attr);
     H5T_class_t cls = H5Tget_class(type);
 
@@ -175,7 +149,7 @@ static void print_attr_value(hid_t attr) {
     H5Tclose(type);
 }
 
-static void show_attrs(hid_t obj, IterData *idata, hsize_t siblings_total, hsize_t siblings_index_base) {
+void show_attrs(hid_t obj, IterData *idata, hsize_t siblings_total, hsize_t siblings_index_base) {
     hsize_t nattrs = (hsize_t)H5Aget_num_attrs(obj);
     for (hsize_t j = 0; j < nattrs; j++) {
         IterData attrdata = *idata;
@@ -202,7 +176,7 @@ static void show_attrs(hid_t obj, IterData *idata, hsize_t siblings_total, hsize
     }
 }
 
-static herr_t group_iter(hid_t loc_id, const char *name,
+herr_t group_iter(hid_t loc_id, const char *name,
                          const H5L_info_t *linfo, void *op_data) {
     (void)linfo;
     IterData *idata = (IterData *)op_data;
@@ -256,59 +230,3 @@ static herr_t group_iter(hid_t loc_id, const char *name,
     return 0;
 }
 
-int main(int argc, char **argv) {
-    if (argc < 2) {
-        fprintf(stderr, "Usage: %s file.h5 [--structure]\n", argv[0]);
-        return 1;
-    }
-
-    if (argc >= 3 && strcmp(argv[2], "--structure") == 0) {
-        show_structure_only = 1;
-    }
-
-    use_color = isatty(STDOUT_FILENO);
-
-    hid_t file = H5Fopen(argv[1], H5F_ACC_RDONLY, H5P_DEFAULT);
-    if (file < 0) {
-        fprintf(stderr, "Cannot open file: %s\n", argv[1]);
-        return 1;
-    }
-
-    printf("%s\n", argv[1]);
-
-    hid_t root = H5Gopen(file, "/", H5P_DEFAULT);
-    if (root < 0) {
-        fprintf(stderr, "Cannot open root group\n");
-        H5Fclose(file);
-        return 1;
-    }
-
-    hsize_t root_nlinks = 0;
-    H5Gget_num_objs(root, &root_nlinks);
-    hsize_t root_nattrs = (hsize_t)H5Aget_num_attrs(root);
-    hsize_t root_total = root_nattrs + root_nlinks;
-
-    IterData rootdata = {0};
-    rootdata.depth = 0;
-    memset(rootdata.last_flags, 0, sizeof(rootdata.last_flags));
-
-    show_attrs(root, &rootdata, root_total, 0);
-
-    for (hsize_t i = 0; i < root_nlinks; i++) {
-        char childname[1024];
-        ssize_t len = H5Lget_name_by_idx(root, ".", H5_INDEX_NAME, H5_ITER_NATIVE,
-                                         i, childname, sizeof(childname), H5P_DEFAULT);
-        if (len < 0) continue;
-
-        IterData childdata = {0};
-        childdata.depth = 1;
-        memset(childdata.last_flags, 0, sizeof(childdata.last_flags));
-        childdata.last_flags[childdata.depth] = ((root_nattrs + i) == root_total - 1);
-
-        group_iter(root, childname, NULL, &childdata);
-    }
-
-    H5Gclose(root);
-    H5Fclose(file);
-    return 0;
-}
