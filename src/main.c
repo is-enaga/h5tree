@@ -7,9 +7,6 @@
 #include "tree.h"
 #include "json.h"
 
-// treeh5.c 側で提供している関数
-// extern herr_t group_iter(hid_t loc_id, const char *name,
-//                          const H5L_info_t *linfo, void *op_data);
 
 int main(int argc, char **argv) {
     int json_mode = 0;
