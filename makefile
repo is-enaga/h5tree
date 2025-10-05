@@ -1,4 +1,3 @@
-# Makefile for treeh5
 # Requires: libhdf5-dev (provides pkg-config 'hdf5')
 
 CC       = gcc
@@ -6,7 +5,7 @@ CFLAGS   = -std=c11 -O2 -Wall -Wextra -Iinclude
 CPPFLAGS = $(shell pkg-config --cflags hdf5)
 LDLIBS   = $(shell pkg-config --libs hdf5)
 
-TARGET   = treeh5
+TARGET   = h5tree
 
 SRC      = src/main.c \
            src/utils.c \
