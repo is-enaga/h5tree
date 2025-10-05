@@ -15,7 +15,7 @@ int main(int argc, char **argv) {
     const char *filename = NULL;
 
     for (int i = 1; i < argc; i++) {
-        if (strcmp(argv[i], "--json") == 0) {
+        if (strcmp(argv[i], "--json") == 0 || strcmp(argv[i], "-j") == 0) {
             json_mode = 1;
         } else if (strcmp(argv[i], "--structure") == 0 || strcmp(argv[i], "-s") == 0) {
             show_structure_only = 1;
