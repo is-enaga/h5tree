@@ -1,7 +1,7 @@
 # Requires: libhdf5-dev (provides pkg-config 'hdf5')
-
+VERSION = $(shell git describe --tags --always)
 CC       = gcc
-CFLAGS   = -std=c11 -O2 -Wall -Wextra -Iinclude
+CFLAGS   = -std=c11 -O2 -Wall -Wextra -Iinclude -DVERSION=\"$(VERSION)\"
 CPPFLAGS = $(shell pkg-config --cflags hdf5)
 LDLIBS   = $(shell pkg-config --libs hdf5)
 
