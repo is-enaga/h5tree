@@ -1,0 +1,41 @@
+#!/bin/sh
+
+echo "Configuring h5tree..."
+
+# デフォルトのインストール先
+prefix="/usr/local"
+
+# 引数処理
+for arg in "$@"; do
+  case $arg in
+    --prefix=*)
+      prefix="${arg#*=}"
+      ;;
+    --help|-h)
+      echo "Usage: ./configure [--prefix=/path/to/install]"
+      exit 0
+      ;;
+    *)
+      echo "Unknown option: $arg"
+      exit 1
+      ;;
+  esac
+done
+
+# HDF5フラグ取得
+HDF5_CFLAGS=$(pkg-config --cflags hdf5 2>/dev/null)
+HDF5_LIBS=$(pkg-config --libs hdf5 2>/dev/null)
+
+if [ -z "$HDF5_CFLAGS" ] || [ -z "$HDF5_LIBS" ]; then
+  echo "Error: HDF5 development headers not found via pkg-config."
+  exit 1
+fi
+
+# config.mk を生成
+cat > config.mk <<EOF
+CPPFLAGS = $HDF5_CFLAGS
+LDLIBS   = $HDF5_LIBS
+PREFIX   = $prefix
+EOF
+
+echo "Configuration complete. Install prefix: $prefix"

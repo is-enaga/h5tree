@@ -1,18 +1,24 @@
 # Requires: libhdf5-dev (provides pkg-config 'hdf5')
-VERSION = $(shell git describe --tags --always)
-CC       = gcc
-CFLAGS   = -std=c11 -O2 -Wall -Wextra -Iinclude -DVERSION=\"$(VERSION)\"
-CPPFLAGS = $(shell pkg-config --cflags hdf5)
-LDLIBS   = $(shell pkg-config --libs hdf5)
+VERSION   = $(shell git describe --tags --always)
+CC        = gcc
+CFLAGS    = -std=c11 -O2 -Wall -Wextra -Iinclude -DVERSION=\"$(VERSION)\"
 
-TARGET   = h5tree
+# Default values (used if config.mk is missing)
+CPPFLAGS  ?= $(shell pkg-config --cflags hdf5)
+LDLIBS    ?= $(shell pkg-config --libs hdf5)
+PREFIX    ?= /usr/local
 
-SRC      = src/main.c \
-           src/utils.c \
-           src/view/tree.c \
-           src/view/json.c
+# Override with configure-generated values if present
+-include config.mk
 
-OBJ      = $(SRC:.c=.o)
+TARGET    = h5tree
+
+SRC       = src/main.c \
+            src/utils.c \
+            src/view/tree.c \
+            src/view/json.c
+
+OBJ       = $(SRC:.c=.o)
 
 all: $(TARGET)
 
@@ -23,7 +29,8 @@ $(TARGET): $(OBJ)
 	$(CC) $(CFLAGS) $(CPPFLAGS) -c $< -o $@
 
 clean:
-	rm -f $(TARGET) $(OBJ)
+	rm -f $(TARGET) $(OBJ) config.mk
 
 install: $(TARGET)
-	install -m 0755 $(TARGET) /usr/local/bin/$(TARGET)
+	install -d $(PREFIX)/bin
+	install -m 0755 $(TARGET) $(PREFIX)/bin/$(TARGET)
