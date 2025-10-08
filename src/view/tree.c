@@ -14,10 +14,10 @@ int show_structure_only = 0;
 
 static void print_indent(int depth, const int *last_flags) {
     for (int i = 1; i < depth; i++) {
-        printf("%s   ", last_flags[i] ? "    " : "│");
+        printf("%s ", last_flags[i] ? " " : "│");
     }
     if (depth > 0) {
-        printf("%s── ", last_flags[depth] ? "└" : "├");
+        printf("%s─", last_flags[depth] ? "└" : "├");
     }
 }
 
@@ -30,78 +30,75 @@ void print_dataset_info(hid_t dset) {
     H5Sget_simple_extent_dims(space, dims, NULL);
 
     hid_t dtype = H5Dget_type(dset);
-    char type_name[32] = "unknown";
     H5T_class_t cls = H5Tget_class(dtype);
-    size_t size = H5Tget_size(dtype);
+    size_t type_size = H5Tget_size(dtype);
+
+    char type_name[32] = "unknown";
     if (cls == H5T_INTEGER) {
         H5T_sign_t sign = H5Tget_sign(dtype);
         snprintf(type_name, sizeof(type_name),
-                 "%s%zu", (sign == H5T_SGN_NONE ? "uint" : "int"), size * 8);
+                 "%s%zu", (sign == H5T_SGN_NONE ? "uint" : "int"), type_size * 8);
     } else if (cls == H5T_FLOAT) {
-        snprintf(type_name, sizeof(type_name), "float%zu", size * 8);
+        snprintf(type_name, sizeof(type_name), "float%zu", type_size * 8);
     } else if (cls == H5T_STRING) {
         snprintf(type_name, sizeof(type_name), "string");
     }
 
     hid_t dcpl = H5Dget_create_plist(dset);
     hsize_t storage_size = H5Dget_storage_size(dset);
-    char size_str[32];
-    format_size(size_str, sizeof(size_str), storage_size);
 
     int nfilters = H5Pget_nfilters(dcpl);
-    char filter_info[128] = "";
+    char filter_info[256] = "";
     for (int i = 0; i < nfilters; i++) {
         unsigned int flags;
         size_t cd_nelmts = 20;
         unsigned int cd_values[20];
         char name[64];
-        H5Z_filter_t filter = H5Pget_filter(dcpl, i, &flags, &cd_nelmts, cd_values, sizeof(name), name, NULL);
+        H5Z_filter_t filter = H5Pget_filter(dcpl, i, &flags, &cd_nelmts,
+                                            cd_values, sizeof(name), name, NULL);
+        char one[128] = "";
         if (filter == H5Z_FILTER_DEFLATE) {
             unsigned int level = (cd_nelmts > 0) ? cd_values[0] : 0;
             char size_str_comp[32];
             format_size(size_str_comp, sizeof(size_str_comp), storage_size);
-
-            snprintf(filter_info, sizeof(filter_info),
-                    "(%s%s level=%u%s)=>%s", COLOR_COMP, "gzip", level, COLOR_RESET, size_str_comp);
+            snprintf(one, sizeof(one),
+                     "(%sgzip level=%u%s)=>%s", COLOR_COMP, level, COLOR_RESET, size_str_comp);
         } else if (filter == H5Z_FILTER_SZIP) {
             unsigned int options_mask = (cd_nelmts > 0) ? cd_values[0] : 0;
             unsigned int pixels_per_block = (cd_nelmts > 1) ? cd_values[1] : 0;
-            snprintf(filter_info, sizeof(filter_info),
-                    "(%s%s%s options=0x%X pixels_per_block=%u)", COLOR_COMP, "szip", COLOR_RESET,
-                    options_mask, pixels_per_block);
+            snprintf(one, sizeof(one),
+                     "(%sszip%s options=0x%X pixels_per_block=%u)", COLOR_COMP, COLOR_RESET,
+                     options_mask, pixels_per_block);
         } else if (filter == H5Z_FILTER_SHUFFLE) {
-            snprintf(filter_info, sizeof(filter_info),
-                    "(%s%s%s)", COLOR_COMP, "shuffle", COLOR_RESET);
+            snprintf(one, sizeof(one), "(%sshuffle%s)", COLOR_COMP, COLOR_RESET);
         } else if (filter == H5Z_FILTER_FLETCHER32) {
-            snprintf(filter_info, sizeof(filter_info),
-                    "(%s%s%s)", COLOR_COMP, "fletcher32", COLOR_RESET);
+            snprintf(one, sizeof(one), "(%sfletcher32%s)", COLOR_COMP, COLOR_RESET);
         } else if (filter == H5Z_FILTER_NBIT) {
-            snprintf(filter_info, sizeof(filter_info),
-                    "(%s%s%s)", COLOR_COMP, "nbit", COLOR_RESET);
+            snprintf(one, sizeof(one), "(%snbit%s)", COLOR_COMP, COLOR_RESET);
         } else if (filter == H5Z_FILTER_SCALEOFFSET) {
-            snprintf(filter_info, sizeof(filter_info),
-                    "(%s%s%s)", COLOR_COMP, "scaleoffset", COLOR_RESET);
+            snprintf(one, sizeof(one), "(%sscaleoffset%s)", COLOR_COMP, COLOR_RESET);
         } else {
-            snprintf(filter_info, sizeof(filter_info),
-                    "(%sunknown filter id=%d%s)", COLOR_COMP, (int)filter, COLOR_RESET);
+            snprintf(one, sizeof(one), "(%sunknown filter id=%d%s)", COLOR_COMP, (int)filter, COLOR_RESET);
         }
+        if (filter_info[0]) strncat(filter_info, " ", sizeof(filter_info) - strlen(filter_info) - 1);
+        strncat(filter_info, one, sizeof(filter_info) - strlen(filter_info) - 1);
     }
+
     printf("\t[shape=(");
     for (int i = 0; i < ndims; i++) {
         printf("%s%llu", i ? "," : "", (unsigned long long)dims[i]);
     }
 
-    hsize_t logical_size = size; // 型サイズ（バイト）
+    hsize_t logical_size = (hsize_t)type_size; // bytes per element
     for (int i = 0; i < ndims; i++) {
         logical_size *= dims[i];
     }
-    char logical_str[32], compressed_str[32];
+    char logical_str[32];
     format_size(logical_str, sizeof(logical_str), logical_size);
-    format_size(compressed_str, sizeof(compressed_str), storage_size);
 
     printf(")/%s%s%s/%s", COLOR_TYPE, type_name, COLOR_RESET, logical_str);
     if (filter_info[0]) {
-        printf("%s", filter_info); // 例: (gzip level=6 -> 1.2KB)
+        printf("%s", filter_info);
     }
     printf("]");
 
@@ -116,35 +113,65 @@ void print_attr_value(hid_t attr) {
 
     printf("\t= ");
     if (cls == H5T_INTEGER) {
-        int val = 0;
-        H5Aread(attr, type, &val);
+        size_t size = H5Tget_size(type);
         H5T_sign_t sign = H5Tget_sign(type);
+
+        if (sign == H5T_SGN_NONE) {
+            unsigned long long uval = 0;
+            H5Aread(attr, type, &uval);
+            printf("%llu ", uval);
+            printf("(%suint%zu%s)", COLOR_TYPE, size * 8, COLOR_RESET);
+        } else {
+            long long sval = 0;
+            H5Aread(attr, type, &sval);
+            printf("%lld ", sval);
+            printf("(%sint%zu%s)", COLOR_TYPE, size * 8, COLOR_RESET);
+        }
+
+    } else if (cls == H5T_FLOAT) {
         size_t size = H5Tget_size(type);
-        printf("%d (", val);
-        if (sign == H5T_SGN_NONE)
-            printf(" (%suint%zu%s)", COLOR_TYPE, size * 8, COLOR_RESET);
-        else
-            printf(" (%sint%zu%s)", COLOR_TYPE, size * 8, COLOR_RESET);
-        printf(")");
-    }
-    else if (cls == H5T_FLOAT) {
-        double val = 0;
-        H5Aread(attr, type, &val);
-        size_t size = H5Tget_size(type);
-        printf(" (%sfloat%zu%s)", COLOR_TYPE, size * 8, COLOR_RESET);
+        if (size == sizeof(float)) {
+            float val = 0.0f;
+            H5Aread(attr, type, &val);
+            printf("%g ", (double)val);
+        } else if (size == sizeof(double)) {
+            double val = 0.0;
+            H5Aread(attr, type, &val);
+            printf("%g ", val);
+        } else {
+            // Fallback for extended types: attempt to read as double
+            double val = 0.0;
+            H5Aread(attr, type, &val);
+            printf("%g ", val);
+        }
+        printf("(%sfloat%zu%s)", COLOR_TYPE, size * 8, COLOR_RESET);
+
     } else if (cls == H5T_STRING) {
         if (H5Tis_variable_str(type)) {
             char *vstr = NULL;
             H5Aread(attr, type, &vstr);
             if (vstr) {
-                printf("\"%s\" (%sstring%s)", vstr, COLOR_TYPE, COLOR_RESET);
+                printf("\"%s\" ", vstr);
                 free(vstr);
+            } else {
+                printf("\"\" ");
             }
         } else {
-            char buf[256] = "";
-            H5Aread(attr, type, buf);
-            printf(" (%sstring%s)", COLOR_TYPE, COLOR_RESET);
+            size_t n = H5Tget_size(type);
+            char *buf = (char *)calloc(n + 1, 1);
+            if (buf) {
+                H5Aread(attr, type, buf);
+                buf[n] = '\0';
+                printf("\"%s\" ", buf);
+                free(buf);
+            } else {
+                printf("\"\" ");
+            }
         }
+        printf("(%sstring%s)", COLOR_TYPE, COLOR_RESET);
+
+    } else {
+        printf("(%sunsupported attr type%s)", COLOR_TYPE, COLOR_RESET);
     }
     H5Tclose(type);
 }
